@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  user_id  Int     @id @default(autoincrement())
+  name     String?
+  email    String  @unique
+  password String
+  role     String
+
+  applications Application[]
+  projects     Project[]
+}
+
+model Project {
+  project_id  Int     @id @default(autoincrement())
+  name        String
+  description String?
+
+  owner_id Int
+  owner    User @relation(fields: [owner_id], references: [user_id])
+
+  vacancies Vacancy[]
+}
+
+model Vacancy {
+  vacancy_id  Int     @id @default(autoincrement())
+  title       String
+  description String?
+
+  project_id Int
+  project    Project @relation(fields: [project_id], references: [project_id])
+
+  applications Application[]
+}
+
+model Application {
+  application_id Int @id @default(autoincrement())
+
+  user_id Int
+  user    User @relation(fields: [user_id], references: [user_id])
+
+  vacancy_id Int
+  vacancy    Vacancy @relation(fields: [vacancy_id], references: [vacancy_id])
+
+  status String
+
+  interview Interview?
+}
+
+model Interview {
+  interview_id Int @id @default(autoincrement())
+
+  application_id Int         @unique
+  application    Application @relation(fields: [application_id], references: [application_id])
+
+  interviewer_id Int
+  date           DateTime
+
+  result InterviewResult?
+}
+
+model InterviewResult {
+  result_id Int @id @default(autoincrement())
+
+  interview_id Int       @unique
+  interview    Interview @relation(fields: [interview_id], references: [interview_id])
+
+  score   Int
+  comment String?
+}

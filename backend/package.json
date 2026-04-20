@@ -1,5 +1,10 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "main": "index.js"
+  "main": "index.js",
+  "dependencies": {
+    "@prisma/client": "^7.7.0",
+    "pg": "^8.20.0",
+    "prisma": "^6.19.3"
+  }
 }
