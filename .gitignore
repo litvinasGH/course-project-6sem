@@ -1,4 +1,28 @@
+# Node.js
 node_modules/
+npm-debug.log
+
+# Env
 .env
-postgres_data/
+
+# Build
 frontend-build/
+dist/
+build/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+postgres_data/
+
+# VS Code
+.vscode/
+
+# Temporary
+tmp/
