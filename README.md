@@ -13,6 +13,7 @@
 
 ## 🧠 Архитектура
 
+```
 Client (Browser)
 ↓
 NGINX
@@ -20,6 +21,7 @@ NGINX
 Backend (Node.js)
 ↓
 PostgreSQL
+```
 
 ---
 
@@ -29,12 +31,13 @@ PostgreSQL
 - PostgreSQL
 - Docker + Docker Compose
 - NGINX
-- (позже React)
+- React
 
 ---
 
 ## 📦 Структура проекта
 
+```
 app/
 ├── backend/
 ├── frontend/
@@ -42,6 +45,7 @@ app/
 ├── nginx/
 ├── docker-compose.yml
 └── init.sql
+```
 
 ---
 
@@ -50,3 +54,21 @@ app/
 ```bash
 docker-compose down -v
 docker-compose up -d
+```
+
+Открыть в браузере:
+
+http://localhost:80
+
+---
+
+🔐 Роли
+- Candidate
+- Interviewer
+- Project Manager
+
+---
+
+🛠️ Статус проекта
+
+🚧 В разработке
