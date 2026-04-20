@@ -62,13 +62,13 @@ http://localhost:80
 
 ---
 
-🔐 Роли
+## 🔐 Роли
 - Candidate
 - Interviewer
 - Project Manager
 
 ---
 
-🛠️ Статус проекта
+## 🛠️ Статус проекта
 
 🚧 В разработке
