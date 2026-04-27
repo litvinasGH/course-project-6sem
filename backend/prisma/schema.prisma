@@ -4,74 +4,206 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
-  user_id  Int     @id @default(autoincrement())
-  name     String?
-  email    String  @unique
-  password String
-  role     String
+  user_id       Int      @id @default(autoincrement())
+  name          String?
+  email         String   @unique
+  password_hash String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
 
-  applications Application[]
-  projects     Project[]
+  applications        Application[]     @relation("CandidateApplications")
+  decidedApplications Application[]     @relation("ApplicationDecisionMaker")
+  interviews          Interview[]       @relation("InterviewerInterviews")
+  ownedProjects       Project[]         @relation("ProjectOwner")
+  projectMembers      ProjectMember[]
+  profile             CandidateProfile?
+  roles               UserRole[]
+
+  @@map("users")
+}
+
+model UserRole {
+  id      Int        @id @default(autoincrement())
+  user_id Int
+  role    SystemRole
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@unique([user_id, role])
+  @@map("user_roles")
+}
+
+model CandidateProfile {
+  profile_id Int      @id @default(autoincrement())
+  user_id    Int      @unique
+  experience Json?
+  skills     Json?
+  resume_url String?
+  links      Json?
+  contacts   Json?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@map("candidate_profiles")
 }
 
 model Project {
-  project_id  Int     @id @default(autoincrement())
+  project_id  Int           @id @default(autoincrement())
   name        String
   description String?
+  status      ProjectStatus @default(ACTIVE)
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @updatedAt
 
   owner_id Int
-  owner    User @relation(fields: [owner_id], references: [user_id])
+  owner    User @relation("ProjectOwner", fields: [owner_id], references: [user_id])
 
-  vacancies Vacancy[]
+  vacancies      Vacancy[]
+  projectMembers ProjectMember[]
+
+  @@map("projects")
 }
 
 model Vacancy {
-  vacancy_id  Int     @id @default(autoincrement())
+  vacancy_id  Int           @id @default(autoincrement())
   title       String
   description String?
+  status      VacancyStatus @default(OPEN)
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @updatedAt
 
   project_id Int
   project    Project @relation(fields: [project_id], references: [project_id])
 
   applications Application[]
+
+  @@map("vacancies")
 }
 
 model Application {
-  application_id Int @id @default(autoincrement())
+  application_id   Int               @id @default(autoincrement())
+  status           ApplicationStatus @default(SUBMITTED)
+  decision_comment String?
+  decision_at      DateTime?
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
 
   user_id Int
-  user    User @relation(fields: [user_id], references: [user_id])
+  user    User @relation("CandidateApplications", fields: [user_id], references: [user_id])
 
   vacancy_id Int
   vacancy    Vacancy @relation(fields: [vacancy_id], references: [vacancy_id])
 
-  status String
+  decision_by   Int?
+  decisionMaker User? @relation("ApplicationDecisionMaker", fields: [decision_by], references: [user_id])
 
   interview Interview?
+
+  @@unique([user_id, vacancy_id])
+  @@map("applications")
 }
 
 model Interview {
-  interview_id Int @id @default(autoincrement())
+  interview_id Int              @id @default(autoincrement())
+  status       InterviewStatus  @default(ASSIGNED)
+  scheduled_at DateTime?
+  format       InterviewFormat?
+  location     String?
+  meeting_link String?
+  created_at   DateTime         @default(now())
+  updated_at   DateTime         @updatedAt
 
   application_id Int         @unique
   application    Application @relation(fields: [application_id], references: [application_id])
 
   interviewer_id Int
-  date           DateTime
+  interviewer    User @relation("InterviewerInterviews", fields: [interviewer_id], references: [user_id])
 
   result InterviewResult?
+
+  @@map("interviews")
 }
 
 model InterviewResult {
-  result_id Int @id @default(autoincrement())
+  result_id      Int                     @id @default(autoincrement())
+  /// Оценка от 0 до 10; диапазон закреплен CHECK-constraint в миграции.
+  score          Int
+  recommendation InterviewRecommendation
+  comment        String?
+  created_at     DateTime                @default(now())
+  updated_at     DateTime                @updatedAt
 
   interview_id Int       @unique
   interview    Interview @relation(fields: [interview_id], references: [interview_id])
 
-  score   Int
-  comment String?
+  @@map("interview_results")
+}
+
+model ProjectMember {
+  id              Int      @id @default(autoincrement())
+  project_id      Int
+  user_id         Int
+  role_in_project String
+  created_at      DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
+  user    User    @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@unique([project_id, user_id, role_in_project])
+  @@map("project_members")
+}
+
+enum SystemRole {
+  CANDIDATE       @map("Кандидат")
+  INTERVIEWER     @map("Интервьюер")
+  PROJECT_MANAGER @map("Менеджер проекта")
+}
+
+enum ProjectStatus {
+  ACTIVE   @map("Активен")
+  CLOSED   @map("Закрыт")
+  ARCHIVED @map("Архивный")
+}
+
+enum VacancyStatus {
+  OPEN   @map("Открыта")
+  PAUSED @map("Приостановлена")
+  CLOSED @map("Закрыта")
+}
+
+enum ApplicationStatus {
+  SUBMITTED            @map("Подана")
+  UNDER_REVIEW         @map("На рассмотрении")
+  INTERVIEWER_ASSIGNED @map("Интервьюер назначен")
+  INTERVIEW_SCHEDULED  @map("Собеседование назначено")
+  INTERVIEW_COMPLETED  @map("Собеседование пройдено")
+  ACCEPTED             @map("Принята")
+  REJECTED             @map("Отклонена")
+  WITHDRAWN            @map("Отозвана")
+}
+
+enum InterviewStatus {
+  ASSIGNED  @map("Назначен интервьюер")
+  SCHEDULED @map("Запланировано")
+  COMPLETED @map("Проведено")
+  CANCELED  @map("Отменено")
+  NO_SHOW   @map("Неявка")
+}
+
+enum InterviewFormat {
+  ONLINE  @map("Онлайн")
+  OFFLINE @map("Оффлайн")
+  MIXED   @map("Смешанный")
+}
+
+enum InterviewRecommendation {
+  HIRE                 @map("Рекомендован")
+  REJECT               @map("Не рекомендован")
+  ADDITIONAL_INTERVIEW @map("Дополнительное собеседование")
+  RESERVE              @map("В резерв")
 }

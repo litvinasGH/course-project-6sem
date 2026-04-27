@@ -1,17 +1,23 @@
 const http = require('http');
-const pool = require('./db');
+const prisma = require('./db');
 
 const server = http.createServer(async (req, res) => {
   try {
     if (req.url === '/api/test') {
-      const result = await pool.query('SELECT NOW()');
-      res.end(result.rows[0].now.toString());
+      const result = await prisma.$queryRaw`SELECT NOW() AS now`;
+      res.end(result[0].now.toString());
     }
 
     else if (req.url === '/api/users') {
-      const result = await pool.query('SELECT * FROM users');
+      const users = await prisma.user.findMany({
+        include: {
+          roles: true,
+          profile: true,
+        },
+      });
+
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify(result.rows));
+      res.end(JSON.stringify(users));
     }
 
     else {
