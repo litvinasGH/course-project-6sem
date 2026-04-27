@@ -6,17 +6,21 @@ const applicationRoutes = require('./routes/applicationRoutes');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 
 const app = express();
+const apiRouter = express.Router();
 
 app.use(express.json());
 
-app.get('/health', (req, res) => {
+apiRouter.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.use('/auth', authRoutes);
-app.use('/projects', projectRoutes);
-app.use('/vacancies', vacancyRoutes);
-app.use('/applications', applicationRoutes);
+apiRouter.use('/auth', authRoutes);
+apiRouter.use('/projects', projectRoutes);
+apiRouter.use('/vacancies', vacancyRoutes);
+apiRouter.use('/applications', applicationRoutes);
+
+app.use('/', apiRouter);
+app.use('/api', apiRouter);
 
 app.use(notFound);
 app.use(errorHandler);
