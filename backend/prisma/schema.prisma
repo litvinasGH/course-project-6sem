@@ -7,65 +7,38 @@ datasource db {
 }
 
 model User {
-  user_id       Int      @id @default(autoincrement())
-  name          String?
-  email         String   @unique
+  user_id       Int        @id @default(autoincrement())
+  name          String
+  email         String     @unique
   password_hash String
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+  role          SystemRole @default(CANDIDATE)
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
 
-  applications        Application[]     @relation("CandidateApplications")
-  decidedApplications Application[]     @relation("ApplicationDecisionMaker")
-  interviews          Interview[]       @relation("InterviewerInterviews")
-  ownedProjects       Project[]         @relation("ProjectOwner")
+  applications        Application[]   @relation("CandidateApplications")
+  decidedApplications Application[]   @relation("ApplicationDecisionMaker")
+  interviews          Interview[]     @relation("InterviewerInterviews")
+  ownedProjects       Project[]       @relation("ProjectOwner")
   projectMembers      ProjectMember[]
-  profile             CandidateProfile?
-  roles               UserRole[]
 
+  @@index([role])
   @@map("users")
 }
 
-model UserRole {
-  id      Int        @id @default(autoincrement())
-  user_id Int
-  role    SystemRole
-
-  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
-
-  @@unique([user_id, role])
-  @@map("user_roles")
-}
-
-model CandidateProfile {
-  profile_id Int      @id @default(autoincrement())
-  user_id    Int      @unique
-  experience Json?
-  skills     Json?
-  resume_url String?
-  links      Json?
-  contacts   Json?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
-
-  @@map("candidate_profiles")
-}
-
 model Project {
-  project_id  Int           @id @default(autoincrement())
+  project_id  Int      @id @default(autoincrement())
   name        String
   description String?
-  status      ProjectStatus @default(ACTIVE)
-  created_at  DateTime      @default(now())
-  updated_at  DateTime      @updatedAt
+  owner_id    Int
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
 
-  owner_id Int
-  owner    User @relation("ProjectOwner", fields: [owner_id], references: [user_id])
+  owner User @relation("ProjectOwner", fields: [owner_id], references: [user_id], onDelete: Restrict)
 
   vacancies      Vacancy[]
   projectMembers ProjectMember[]
 
+  @@index([owner_id])
   @@map("projects")
 }
 
@@ -74,73 +47,79 @@ model Vacancy {
   title       String
   description String?
   status      VacancyStatus @default(OPEN)
+  project_id  Int
   created_at  DateTime      @default(now())
   updated_at  DateTime      @updatedAt
 
-  project_id Int
-  project    Project @relation(fields: [project_id], references: [project_id])
+  project Project @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
 
   applications Application[]
 
+  @@index([project_id])
+  @@index([status])
+  @@index([project_id, status])
   @@map("vacancies")
 }
 
 model Application {
   application_id   Int               @id @default(autoincrement())
+  user_id          Int
+  vacancy_id       Int
   status           ApplicationStatus @default(SUBMITTED)
+  decision_by      Int?
   decision_comment String?
   decision_at      DateTime?
   created_at       DateTime          @default(now())
   updated_at       DateTime          @updatedAt
 
-  user_id Int
-  user    User @relation("CandidateApplications", fields: [user_id], references: [user_id])
-
-  vacancy_id Int
-  vacancy    Vacancy @relation(fields: [vacancy_id], references: [vacancy_id])
-
-  decision_by   Int?
-  decisionMaker User? @relation("ApplicationDecisionMaker", fields: [decision_by], references: [user_id])
+  user          User    @relation("CandidateApplications", fields: [user_id], references: [user_id], onDelete: Cascade)
+  vacancy       Vacancy @relation(fields: [vacancy_id], references: [vacancy_id], onDelete: Cascade)
+  decisionMaker User?   @relation("ApplicationDecisionMaker", fields: [decision_by], references: [user_id], onDelete: SetNull)
 
   interview Interview?
 
   @@unique([user_id, vacancy_id])
+  @@index([user_id])
+  @@index([vacancy_id])
+  @@index([status])
+  @@index([vacancy_id, status])
   @@map("applications")
 }
 
 model Interview {
-  interview_id Int              @id @default(autoincrement())
-  status       InterviewStatus  @default(ASSIGNED)
-  scheduled_at DateTime?
-  format       InterviewFormat?
-  location     String?
-  meeting_link String?
-  created_at   DateTime         @default(now())
-  updated_at   DateTime         @updatedAt
-
-  application_id Int         @unique
-  application    Application @relation(fields: [application_id], references: [application_id])
-
+  interview_id   Int             @id @default(autoincrement())
+  application_id Int             @unique
   interviewer_id Int
-  interviewer    User @relation("InterviewerInterviews", fields: [interviewer_id], references: [user_id])
+  date           DateTime?
+  status         InterviewStatus @default(ASSIGNED)
+  created_at     DateTime        @default(now())
+  updated_at     DateTime        @updatedAt
+
+  application Application @relation(fields: [application_id], references: [application_id], onDelete: Cascade)
+  interviewer User        @relation("InterviewerInterviews", fields: [interviewer_id], references: [user_id], onDelete: Restrict)
 
   result InterviewResult?
 
+  @@index([interviewer_id])
+  @@index([status])
+  @@index([date])
+  @@index([interviewer_id, status])
   @@map("interviews")
 }
 
 model InterviewResult {
   result_id      Int                     @id @default(autoincrement())
-  /// Оценка от 0 до 10; диапазон закреплен CHECK-constraint в миграции.
+  interview_id   Int                     @unique
   score          Int
-  recommendation InterviewRecommendation
   comment        String?
+  recommendation InterviewRecommendation
   created_at     DateTime                @default(now())
   updated_at     DateTime                @updatedAt
 
-  interview_id Int       @unique
-  interview    Interview @relation(fields: [interview_id], references: [interview_id])
+  interview Interview @relation(fields: [interview_id], references: [interview_id], onDelete: Cascade)
 
+  // Prisma does not support CHECK constraints in schema.prisma.
+  // Add in migration SQL: CHECK ("score" >= 0 AND "score" <= 10)
   @@map("interview_results")
 }
 
@@ -150,60 +129,50 @@ model ProjectMember {
   user_id         Int
   role_in_project String
   created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
 
   project Project @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
   user    User    @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
   @@unique([project_id, user_id, role_in_project])
+  @@index([project_id])
+  @@index([user_id])
   @@map("project_members")
 }
 
 enum SystemRole {
-  CANDIDATE       @map("Кандидат")
-  INTERVIEWER     @map("Интервьюер")
-  PROJECT_MANAGER @map("Менеджер проекта")
-}
-
-enum ProjectStatus {
-  ACTIVE   @map("Активен")
-  CLOSED   @map("Закрыт")
-  ARCHIVED @map("Архивный")
+  CANDIDATE       @map("candidate")
+  INTERVIEWER     @map("interviewer")
+  PROJECT_MANAGER @map("project_manager")
 }
 
 enum VacancyStatus {
-  OPEN   @map("Открыта")
-  PAUSED @map("Приостановлена")
-  CLOSED @map("Закрыта")
+  OPEN   @map("open")
+  CLOSED @map("closed")
+  PAUSED @map("paused")
 }
 
 enum ApplicationStatus {
-  SUBMITTED            @map("Подана")
-  UNDER_REVIEW         @map("На рассмотрении")
-  INTERVIEWER_ASSIGNED @map("Интервьюер назначен")
-  INTERVIEW_SCHEDULED  @map("Собеседование назначено")
-  INTERVIEW_COMPLETED  @map("Собеседование пройдено")
-  ACCEPTED             @map("Принята")
-  REJECTED             @map("Отклонена")
-  WITHDRAWN            @map("Отозвана")
+  SUBMITTED           @map("submitted")
+  UNDER_REVIEW        @map("under_review")
+  INTERVIEW_ASSIGNED  @map("interview_assigned")
+  INTERVIEW_SCHEDULED @map("interview_scheduled")
+  INTERVIEW_COMPLETED @map("interview_completed")
+  ACCEPTED            @map("accepted")
+  REJECTED            @map("rejected")
+  WITHDRAWN           @map("withdrawn")
 }
 
 enum InterviewStatus {
-  ASSIGNED  @map("Назначен интервьюер")
-  SCHEDULED @map("Запланировано")
-  COMPLETED @map("Проведено")
-  CANCELED  @map("Отменено")
-  NO_SHOW   @map("Неявка")
-}
-
-enum InterviewFormat {
-  ONLINE  @map("Онлайн")
-  OFFLINE @map("Оффлайн")
-  MIXED   @map("Смешанный")
+  ASSIGNED  @map("assigned")
+  SCHEDULED @map("scheduled")
+  COMPLETED @map("completed")
+  CANCELED  @map("canceled")
 }
 
 enum InterviewRecommendation {
-  HIRE                 @map("Рекомендован")
-  REJECT               @map("Не рекомендован")
-  ADDITIONAL_INTERVIEW @map("Дополнительное собеседование")
-  RESERVE              @map("В резерв")
+  RECOMMENDED          @map("recommended")
+  NOT_RECOMMENDED      @map("not_recommended")
+  RESERVE              @map("reserve")
+  ADDITIONAL_INTERVIEW @map("additional_interview")
 }
