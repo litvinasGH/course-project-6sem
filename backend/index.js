@@ -15,12 +15,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     else {
-      res.end('API работает');
+      res.end('API is work');
     }
   } catch (err) {
     console.error(err);
     res.statusCode = 500;
-    res.end('Ошибка сервера');
+    res.end('500 Server Error');
   }
 });
 
