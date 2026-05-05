@@ -1,5 +1,11 @@
 const ROLES = new Set(['CANDIDATE', 'INTERVIEWER', 'PROJECT_MANAGER']);
 const VACANCY_STATUSES = new Set(['OPEN', 'CLOSED', 'PAUSED']);
+const INTERVIEW_RECOMMENDATIONS = new Set([
+  'RECOMMENDED',
+  'NOT_RECOMMENDED',
+  'RESERVE',
+  'ADDITIONAL_INTERVIEW',
+]);
 
 const ROLE_ALIASES = {
   candidate: 'CANDIDATE',
@@ -35,6 +41,26 @@ function normalizeVacancyStatus(status) {
 
   const value = String(status).trim().toUpperCase();
   return VACANCY_STATUSES.has(value) ? value : undefined;
+}
+
+function normalizeInterviewRecommendation(recommendation) {
+  const value = String(recommendation || '').trim().toUpperCase();
+
+  if (INTERVIEW_RECOMMENDATIONS.has(value)) {
+    return value;
+  }
+
+  return undefined;
+}
+
+function normalizeApplicationDecisionStatus(status) {
+  const value = String(status || '').trim().toUpperCase();
+
+  if (value === 'ACCEPTED' || value === 'REJECTED') {
+    return value;
+  }
+
+  return undefined;
 }
 
 function parsePositiveInt(value, fieldName) {
@@ -146,6 +172,87 @@ function validateVacancyParams(params) {
     : { errors: [], value: { vacancyId: result.value } };
 }
 
+function validateApplicationParams(params) {
+  const result = parsePositiveInt(params.applicationId, 'applicationId');
+
+  return result.error
+    ? { errors: [result.error], value: {} }
+    : { errors: [], value: { applicationId: result.value } };
+}
+
+function validateInterviewParams(params) {
+  const result = parsePositiveInt(params.interviewId, 'interviewId');
+
+  return result.error
+    ? { errors: [result.error], value: {} }
+    : { errors: [], value: { interviewId: result.value } };
+}
+
+function validateAssignInterviewBody(body) {
+  const errors = [];
+  const rawInterviewerId = body.interviewer_id ?? body.interviewerId;
+  const interviewerId = parsePositiveInt(rawInterviewerId, 'interviewer_id');
+
+  if (interviewerId.error) {
+    errors.push(interviewerId.error);
+  }
+
+  return {
+    errors,
+    value: { interviewer_id: interviewerId.value },
+  };
+}
+
+function validateScheduleInterviewBody(body) {
+  const errors = [];
+  const rawDate = body.date;
+  const date = new Date(rawDate);
+
+  if (!rawDate || Number.isNaN(date.getTime())) {
+    errors.push('date must be a valid date string');
+  }
+
+  return {
+    errors,
+    value: { date },
+  };
+}
+
+function validateInterviewResultBody(body) {
+  const errors = [];
+  const score = Number(body.score);
+  const comment = isNonEmptyString(body.comment) ? body.comment.trim() : null;
+  const recommendation = normalizeInterviewRecommendation(body.recommendation);
+
+  if (!Number.isInteger(score) || score < 0 || score > 10) {
+    errors.push('score must be an integer from 0 to 10');
+  }
+
+  if (!recommendation) {
+    errors.push('recommendation must be recommended, not_recommended, reserve, or additional_interview');
+  }
+
+  return {
+    errors,
+    value: { score, comment, recommendation },
+  };
+}
+
+function validateApplicationDecisionBody(body) {
+  const errors = [];
+  const status = normalizeApplicationDecisionStatus(body.status);
+  const comment = isNonEmptyString(body.comment) ? body.comment.trim() : null;
+
+  if (!status) {
+    errors.push('status must be accepted or rejected');
+  }
+
+  return {
+    errors,
+    value: { status, comment },
+  };
+}
+
 module.exports = {
   validateRegisterBody,
   validateLoginBody,
@@ -153,4 +260,10 @@ module.exports = {
   validateVacancyBody,
   validateProjectParams,
   validateVacancyParams,
+  validateApplicationParams,
+  validateInterviewParams,
+  validateAssignInterviewBody,
+  validateScheduleInterviewBody,
+  validateInterviewResultBody,
+  validateApplicationDecisionBody,
 };

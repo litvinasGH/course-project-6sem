@@ -44,9 +44,39 @@ function formatApplication(application) {
     user_id: application.user_id,
     vacancy_id: application.vacancy_id,
     status: formatEnum(application.status),
+    decision_by: application.decision_by,
+    decision_comment: application.decision_comment,
+    decision_at: application.decision_at,
     vacancy: application.vacancy ? formatVacancy(application.vacancy) : undefined,
     created_at: application.created_at,
     updated_at: application.updated_at,
+  };
+}
+
+function formatInterview(interview) {
+  return {
+    interview_id: interview.interview_id,
+    application_id: interview.application_id,
+    interviewer_id: interview.interviewer_id,
+    date: interview.date,
+    status: formatEnum(interview.status),
+    application: interview.application ? formatApplication(interview.application) : undefined,
+    interviewer: interview.interviewer ? formatUser(interview.interviewer) : undefined,
+    created_at: interview.created_at,
+    updated_at: interview.updated_at,
+  };
+}
+
+function formatInterviewResult(result) {
+  return {
+    result_id: result.result_id,
+    interview_id: result.interview_id,
+    score: result.score,
+    comment: result.comment,
+    recommendation: formatEnum(result.recommendation),
+    interview: result.interview ? formatInterview(result.interview) : undefined,
+    created_at: result.created_at,
+    updated_at: result.updated_at,
   };
 }
 
@@ -55,4 +85,6 @@ module.exports = {
   formatProject,
   formatVacancy,
   formatApplication,
+  formatInterview,
+  formatInterviewResult,
 };

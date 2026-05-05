@@ -3,6 +3,8 @@ const authRoutes = require('./routes/authRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 const vacancyRoutes = require('./routes/vacancyRoutes');
 const applicationRoutes = require('./routes/applicationRoutes');
+const interviewRoutes = require('./routes/interviewRoutes');
+const interviewResultRoutes = require('./routes/interviewResultRoutes');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 
 const app = express();
@@ -18,6 +20,8 @@ apiRouter.use('/auth', authRoutes);
 apiRouter.use('/projects', projectRoutes);
 apiRouter.use('/vacancies', vacancyRoutes);
 apiRouter.use('/applications', applicationRoutes);
+apiRouter.use('/', interviewRoutes);
+apiRouter.use('/', interviewResultRoutes);
 
 app.use('/', apiRouter);
 app.use('/api', apiRouter);

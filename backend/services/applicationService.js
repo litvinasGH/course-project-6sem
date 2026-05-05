@@ -59,7 +59,69 @@ async function getMyApplications(userId) {
   return applications.map(formatApplication);
 }
 
+async function makeDecision(applicationId, data, projectManager) {
+  const application = await prisma.application.findUnique({
+    where: { application_id: applicationId },
+    include: {
+      vacancy: {
+        include: {
+          project: true,
+        },
+      },
+      interview: {
+        include: {
+          result: true,
+        },
+      },
+    },
+  });
+
+  if (!application) {
+    throw new AppError('Application not found', 404);
+  }
+
+  if (application.vacancy.project.owner_id !== projectManager.user_id) {
+    throw new AppError('Only the project owner can make this decision', 403);
+  }
+
+  if (application.decision_at || application.status === 'ACCEPTED' || application.status === 'REJECTED') {
+    throw new AppError('Decision has already been made', 400);
+  }
+
+  if (!application.interview) {
+    throw new AppError('Application has no interview', 400);
+  }
+
+  if (application.interview.status !== 'COMPLETED') {
+    throw new AppError('Interview must be completed before final decision', 400);
+  }
+
+  if (!application.interview.result) {
+    throw new AppError('Interview result is required before final decision', 400);
+  }
+
+  const updatedApplication = await prisma.application.update({
+    where: { application_id: applicationId },
+    data: {
+      status: data.status,
+      decision_by: projectManager.user_id,
+      decision_comment: data.comment,
+      decision_at: new Date(),
+    },
+    include: {
+      vacancy: {
+        include: {
+          project: true,
+        },
+      },
+    },
+  });
+
+  return formatApplication(updatedApplication);
+}
+
 module.exports = {
   applyToVacancy,
   getMyApplications,
+  makeDecision,
 };

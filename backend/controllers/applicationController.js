@@ -14,7 +14,18 @@ async function getMyApplications(req, res) {
   res.json({ applications });
 }
 
+async function makeDecision(req, res) {
+  const application = await applicationService.makeDecision(
+    req.params.applicationId,
+    req.body,
+    req.user,
+  );
+
+  res.json({ application });
+}
+
 module.exports = {
   applyToVacancy,
   getMyApplications,
+  makeDecision,
 };
