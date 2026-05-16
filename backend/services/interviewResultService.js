@@ -1,6 +1,7 @@
 const prisma = require('../db');
 const AppError = require('../utils/appError');
 const { formatInterviewResult } = require('../utils/formatters');
+const logger = require('../utils/logger');
 
 const resultInclude = {
   interview: {
@@ -114,9 +115,23 @@ async function createResult(interviewId, data, interviewer) {
       include: resultInclude,
     });
 
+    logger.action('interview_result_created', {
+      result_id: result.result_id,
+      interview_id: interviewId,
+      interviewer_id: interviewer.user_id,
+      score: result.score,
+      recommendation: result.recommendation,
+    });
+
     return formatInterviewResult(result);
   } catch (err) {
     if (err.code === 'P2002') {
+      logger.warn('interview_result_create_failed', {
+        interview_id: interviewId,
+        interviewer_id: interviewer.user_id,
+        reason: 'result_already_exists',
+      });
+
       throw new AppError('Interview already has a result', 409);
     }
 
@@ -145,6 +160,14 @@ async function updateResult(interviewId, data, interviewer) {
       recommendation: data.recommendation,
     },
     include: resultInclude,
+  });
+
+  logger.action('interview_result_updated', {
+    result_id: result.result_id,
+    interview_id: interviewId,
+    interviewer_id: interviewer.user_id,
+    score: result.score,
+    recommendation: result.recommendation,
   });
 
   return formatInterviewResult(result);

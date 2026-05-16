@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { authApi } from '../api/endpoints';
+import { logger } from '../utils/logger';
 
 const AuthContext = createContext(null);
 
@@ -42,7 +43,9 @@ export function AuthProvider({ children }) {
           setUser(data.user);
           localStorage.setItem('user', JSON.stringify(data.user));
         }
-      } catch {
+      } catch (error) {
+        logger.warn('session_restore_failed', { error });
+
         if (active) {
           clearSession();
           setUser(null);
@@ -61,23 +64,51 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  useEffect(() => {
+    function handleExpiredSession() {
+      clearSession();
+      setUser(null);
+      logger.warn('session_expired');
+    }
+
+    window.addEventListener('auth:expired', handleExpiredSession);
+
+    return () => {
+      window.removeEventListener('auth:expired', handleExpiredSession);
+    };
+  }, []);
+
   async function login(credentials) {
+    logger.action('login_attempt', { email: credentials.email });
     const { data } = await authApi.login(credentials);
     saveSession(data.token, data.user);
     setUser(data.user);
+    logger.action('login_success', {
+      user_id: data.user?.user_id,
+      role: data.user?.role,
+    });
     return data.user;
   }
 
   async function register(payload) {
+    logger.action('register_attempt', {
+      email: payload.email,
+      role: payload.role,
+    });
     const { data } = await authApi.register(payload);
     saveSession(data.token, data.user);
     setUser(data.user);
+    logger.action('register_success', {
+      user_id: data.user?.user_id,
+      role: data.user?.role,
+    });
     return data.user;
   }
 
   function logout() {
     clearSession();
     setUser(null);
+    logger.action('logout');
   }
 
   const value = useMemo(() => ({

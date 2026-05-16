@@ -1,6 +1,7 @@
 const prisma = require('../db');
 const AppError = require('../utils/appError');
 const { formatInterview } = require('../utils/formatters');
+const logger = require('../utils/logger');
 
 const FINAL_APPLICATION_STATUSES = new Set(['ACCEPTED', 'REJECTED', 'WITHDRAWN']);
 
@@ -110,9 +111,22 @@ async function assignInterviewer(applicationId, interviewerId, projectManager) {
       });
     });
 
+    logger.action('interview_assigned', {
+      interview_id: interview.interview_id,
+      application_id: applicationId,
+      interviewer_id: interviewerId,
+      assigned_by: projectManager.user_id,
+    });
+
     return formatInterview(interview);
   } catch (err) {
     if (err.code === 'P2002') {
+      logger.warn('interview_assign_failed', {
+        application_id: applicationId,
+        interviewer_id: interviewerId,
+        reason: 'application_already_has_interview',
+      });
+
       throw new AppError('Application already has an interview', 409);
     }
 
@@ -155,6 +169,13 @@ async function scheduleInterview(interviewId, date, interviewer) {
     });
   });
 
+  logger.action('interview_scheduled', {
+    interview_id: interviewId,
+    application_id: interview.application_id,
+    interviewer_id: interviewer.user_id,
+    date: updatedInterview.date,
+  });
+
   return formatInterview(updatedInterview);
 }
 
@@ -182,6 +203,12 @@ async function completeInterview(interviewId, interviewer) {
       data: { status: 'COMPLETED' },
       include: interviewInclude,
     });
+  });
+
+  logger.action('interview_completed', {
+    interview_id: interviewId,
+    application_id: interview.application_id,
+    interviewer_id: interviewer.user_id,
   });
 
   return formatInterview(updatedInterview);
@@ -217,6 +244,13 @@ async function cancelInterview(interviewId, user) {
       data: { status: 'CANCELED' },
       include: interviewInclude,
     });
+  });
+
+  logger.action('interview_canceled', {
+    interview_id: interviewId,
+    application_id: interview.application_id,
+    canceled_by: user.user_id,
+    role: user.role,
   });
 
   return formatInterview(updatedInterview);

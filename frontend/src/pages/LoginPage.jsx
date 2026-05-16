@@ -4,6 +4,7 @@ import Alert from '../components/Alert.jsx';
 import Field from '../components/Field.jsx';
 import { getApiError } from '../api/client';
 import { useAuth } from '../hooks/useAuth.jsx';
+import { logger } from '../utils/logger';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -25,7 +26,9 @@ export default function LoginPage() {
       await login(form);
       navigate('/projects');
     } catch (err) {
-      setError(getApiError(err));
+      const message = getApiError(err);
+      logger.error('login_form_failed', { email: form.email, message });
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -33,9 +36,11 @@ export default function LoginPage() {
 
   return (
     <section className="auth-page">
-      <form className="panel auth-card" onSubmit={handleSubmit}>
-        <h1>Login</h1>
-        <p className="muted">Sign in to continue managing candidate selection.</p>
+      <form className="panel auth-card form-grid" onSubmit={handleSubmit}>
+        <div>
+          <h1>Login</h1>
+          <p className="muted">Sign in to continue.</p>
+        </div>
         <Alert type="error">{error}</Alert>
         <Field label="Email">
           <input name="email" type="email" value={form.email} onChange={updateField} required />

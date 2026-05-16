@@ -1,5 +1,6 @@
 const prisma = require('../db');
 const { formatProject } = require('../utils/formatters');
+const logger = require('../utils/logger');
 
 async function getProjects() {
   const projects = await prisma.project.findMany({
@@ -24,6 +25,11 @@ async function createProject(data, ownerId) {
     include: {
       owner: true,
     },
+  });
+
+  logger.action('project_created', {
+    project_id: project.project_id,
+    owner_id: ownerId,
   });
 
   return formatProject(project);

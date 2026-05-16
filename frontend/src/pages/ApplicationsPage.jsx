@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
 import Alert from '../components/Alert.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
+import { EmptyState, LoadingState, PageHeader } from '../components/StateBlock.jsx';
 import { getApiError } from '../api/client';
 import { applicationApi } from '../api/endpoints';
+import { asArray, formatDateTime } from '../utils/data';
+import { logger } from '../utils/logger';
 
 export default function ApplicationsPage() {
   const [applications, setApplications] = useState([]);
   const [results, setResults] = useState({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingResultId, setLoadingResultId] = useState(null);
 
   async function loadApplications() {
     setLoading(true);
@@ -16,9 +20,11 @@ export default function ApplicationsPage() {
 
     try {
       const { data } = await applicationApi.mine();
-      setApplications(data.applications || []);
+      setApplications(asArray(data.applications));
     } catch (err) {
-      setError(getApiError(err));
+      const text = getApiError(err);
+      logger.error('my_applications_load_failed', { message: text });
+      setError(text);
     } finally {
       setLoading(false);
     }
@@ -29,32 +35,38 @@ export default function ApplicationsPage() {
   }, []);
 
   async function loadResult(applicationId) {
-    setError('');
+    setLoadingResultId(applicationId);
 
     try {
       const { data } = await applicationApi.result(applicationId);
       setResults((current) => ({ ...current, [applicationId]: data.result }));
+      logger.action('application_result_loaded', { application_id: applicationId });
     } catch (err) {
+      const text = getApiError(err);
+      logger.error('application_result_load_failed', {
+        application_id: applicationId,
+        message: text,
+      });
       setResults((current) => ({
         ...current,
-        [applicationId]: { error: getApiError(err) },
+        [applicationId]: { error: text },
       }));
+    } finally {
+      setLoadingResultId(null);
     }
   }
 
   return (
     <section className="stack">
-      <div className="page-title">
-        <div>
-          <h1>My applications</h1>
-          <p className="muted">Track application status and final results.</p>
-        </div>
-      </div>
+      <PageHeader
+        title="My applications"
+        description="Track application status, interview result, and final decision."
+      />
 
       <Alert type="error">{error}</Alert>
 
       {loading ? (
-        <div className="panel">Loading applications...</div>
+        <LoadingState>Loading applications...</LoadingState>
       ) : applications.length ? (
         <div className="stack">
           {applications.map((application) => {
@@ -65,14 +77,30 @@ export default function ApplicationsPage() {
                 <div className="card-header">
                   <div>
                     <h2>{application.vacancy?.title || `Vacancy ${application.vacancy_id}`}</h2>
-                    <p className="muted">{application.vacancy?.project?.name || 'Project'}</p>
+                    <p className="muted">{application.vacancy?.project?.name || 'Project is not available'}</p>
                   </div>
                   <StatusBadge>{application.status}</StatusBadge>
                 </div>
-                <p className="meta">Application ID: {application.application_id}</p>
-                <button className="button secondary" type="button" onClick={() => loadResult(application.application_id)}>
-                  Load result
+
+                <div className="meta-list">
+                  <span>Application ID: {application.application_id}</span>
+                  <span>Created: {formatDateTime(application.created_at)}</span>
+                  {application.decision_at && <span>Decision: {formatDateTime(application.decision_at)}</span>}
+                </div>
+
+                {application.decision_comment && (
+                  <p className="muted">Decision comment: {application.decision_comment}</p>
+                )}
+
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => loadResult(application.application_id)}
+                  disabled={loadingResultId === application.application_id}
+                >
+                  {loadingResultId === application.application_id ? 'Loading...' : 'Load result'}
                 </button>
+
                 {result?.error && <Alert type="error">{result.error}</Alert>}
                 {result && !result.error && (
                   <div className="result-box">
@@ -86,7 +114,9 @@ export default function ApplicationsPage() {
           })}
         </div>
       ) : (
-        <div className="panel">You have not applied to any vacancies yet.</div>
+        <EmptyState title="No applications yet">
+          Open a project vacancy and submit an application.
+        </EmptyState>
       )}
     </section>
   );

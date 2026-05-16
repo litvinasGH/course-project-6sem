@@ -6,10 +6,12 @@ const applicationRoutes = require('./routes/applicationRoutes');
 const interviewRoutes = require('./routes/interviewRoutes');
 const interviewResultRoutes = require('./routes/interviewResultRoutes');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
+const { requestLogger } = require('./middleware/loggingMiddleware');
 
 const app = express();
 const apiRouter = express.Router();
 
+app.use(requestLogger);
 app.use(express.json());
 
 apiRouter.get('/health', (req, res) => {

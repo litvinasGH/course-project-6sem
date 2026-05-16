@@ -21,7 +21,7 @@ export default function Layout() {
               <NavLink to="/projects">Projects</NavLink>
               {isCandidate(user) && <NavLink to="/applications">My applications</NavLink>}
               {isInterviewer(user) && <NavLink to="/interviews">Interviews</NavLink>}
-              <span className="user-pill">{user.name} · {roleLabel(user.role)}</span>
+              <span className="user-pill">{user.name} / {roleLabel(user.role)}</span>
               <button className="button secondary" type="button" onClick={handleLogout}>Logout</button>
             </>
           ) : (

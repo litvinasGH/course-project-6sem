@@ -1,6 +1,7 @@
 const prisma = require('../db');
 const AppError = require('../utils/appError');
 const { formatApplication } = require('../utils/formatters');
+const logger = require('../utils/logger');
 
 async function applyToVacancy(vacancyId, userId) {
   const vacancy = await prisma.vacancy.findUnique({
@@ -31,9 +32,21 @@ async function applyToVacancy(vacancyId, userId) {
       },
     });
 
+    logger.action('application_created', {
+      application_id: application.application_id,
+      user_id: userId,
+      vacancy_id: vacancyId,
+    });
+
     return formatApplication(application);
   } catch (err) {
     if (err.code === 'P2002') {
+      logger.warn('application_create_failed', {
+        user_id: userId,
+        vacancy_id: vacancyId,
+        reason: 'duplicate_application',
+      });
+
       throw new AppError('User has already applied to this vacancy', 409);
     }
 
@@ -115,6 +128,12 @@ async function makeDecision(applicationId, data, projectManager) {
         },
       },
     },
+  });
+
+  logger.action('application_decision_made', {
+    application_id: applicationId,
+    status: updatedApplication.status,
+    decision_by: projectManager.user_id,
   });
 
   return formatApplication(updatedApplication);

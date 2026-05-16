@@ -1,11 +1,12 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
+import { LoadingState } from './StateBlock.jsx';
 
 export default function ProtectedRoute({ roles, children }) {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="panel">Loading session...</div>;
+    return <LoadingState>Loading session...</LoadingState>;
   }
 
   if (!user) {

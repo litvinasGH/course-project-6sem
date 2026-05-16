@@ -3,29 +3,38 @@ import { Link, useParams } from 'react-router-dom';
 import Alert from '../components/Alert.jsx';
 import Field from '../components/Field.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
+import { EmptyState, LoadingState, PageHeader } from '../components/StateBlock.jsx';
 import { getApiError } from '../api/client';
 import { projectApi } from '../api/endpoints';
+import { loadProjectWithVacancies } from '../api/loaders';
 import { useAuth } from '../hooks/useAuth.jsx';
+import { compactText } from '../utils/data';
 import { isManager } from '../utils/roles';
+import { logger } from '../utils/logger';
 
 export default function ProjectDetailsPage() {
   const { id } = useParams();
   const { user } = useAuth();
+  const [project, setProject] = useState(null);
   const [vacancies, setVacancies] = useState([]);
   const [form, setForm] = useState({ title: '', description: '', status: 'OPEN' });
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   async function loadVacancies() {
     setLoading(true);
     setError('');
 
     try {
-      const { data } = await projectApi.vacancies(id);
-      setVacancies(data.vacancies || []);
+      const data = await loadProjectWithVacancies(id);
+      setProject(data.project);
+      setVacancies(data.vacancies);
     } catch (err) {
-      setError(getApiError(err));
+      const text = getApiError(err);
+      logger.error('project_details_load_failed', { project_id: id, message: text });
+      setError(text);
     } finally {
       setLoading(false);
     }
@@ -43,6 +52,8 @@ export default function ProjectDetailsPage() {
     event.preventDefault();
     setError('');
     setMessage('');
+    setSubmitting(true);
+    logger.action('vacancy_create_submit', { project_id: id, title: form.title });
 
     try {
       await projectApi.createVacancy(id, form);
@@ -50,19 +61,25 @@ export default function ProjectDetailsPage() {
       setMessage('Vacancy created.');
       await loadVacancies();
     } catch (err) {
-      setError(getApiError(err));
+      const text = getApiError(err);
+      logger.error('vacancy_create_failed', {
+        project_id: id,
+        title: form.title,
+        message: text,
+      });
+      setError(text);
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
     <section className="stack">
-      <div className="page-title">
-        <div>
-          <h1>Project vacancies</h1>
-          <p className="muted">Project ID: {id}</p>
-        </div>
-        <Link className="button secondary" to="/projects">Back to projects</Link>
-      </div>
+      <PageHeader
+        title={project?.name || `Project ${id}`}
+        description={project?.description || `Project ID: ${id}`}
+        actions={<Link className="button secondary" to="/projects">Back to projects</Link>}
+      />
 
       <Alert type="error">{error}</Alert>
       <Alert type="success">{message}</Alert>
@@ -83,35 +100,39 @@ export default function ProjectDetailsPage() {
               <option value="CLOSED">Closed</option>
             </select>
           </Field>
-          <button className="button primary" type="submit">Create vacancy</button>
+          <button className="button primary" type="submit" disabled={submitting}>
+            {submitting ? 'Creating...' : 'Create vacancy'}
+          </button>
         </form>
       )}
 
-      <div className="grid-list">
-        {loading ? (
-          <div className="panel">Loading vacancies...</div>
-        ) : vacancies.length ? (
-          vacancies.map((vacancy) => (
+      {loading ? (
+        <LoadingState>Loading vacancies...</LoadingState>
+      ) : vacancies.length ? (
+        <div className="grid-list">
+          {vacancies.map((vacancy) => (
             <article className="card" key={vacancy.vacancy_id}>
               <div className="card-header">
                 <h2>{vacancy.title}</h2>
                 <StatusBadge>{vacancy.status}</StatusBadge>
               </div>
-              <p className="muted">{vacancy.description || 'No description'}</p>
+              <p className="muted">{compactText(vacancy.description, 'No description')}</p>
               <p className="meta">Vacancy ID: {vacancy.vacancy_id}</p>
               <Link
                 className="button secondary"
                 to={`/vacancies/${vacancy.vacancy_id}`}
-                state={{ vacancy }}
+                state={{ vacancy, project }}
               >
                 Open vacancy
               </Link>
             </article>
-          ))
-        ) : (
-          <div className="panel">No vacancies for this project yet.</div>
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="No vacancies yet">
+          This project does not have vacancies.
+        </EmptyState>
+      )}
     </section>
   );
 }

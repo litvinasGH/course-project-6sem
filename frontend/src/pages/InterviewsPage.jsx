@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import Alert from '../components/Alert.jsx';
 import Field from '../components/Field.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
+import { EmptyState, LoadingState, PageHeader } from '../components/StateBlock.jsx';
 import { getApiError } from '../api/client';
 import { interviewApi } from '../api/endpoints';
+import { asArray, formatDateTime, toDateTimeLocalValue } from '../utils/data';
+import { logger } from '../utils/logger';
 
 const recommendations = [
   { value: 'recommended', label: 'Recommended' },
@@ -12,12 +15,23 @@ const recommendations = [
   { value: 'additional_interview', label: 'Additional interview' },
 ];
 
+function defaultForm(interview) {
+  return {
+    date: toDateTimeLocalValue(interview?.date),
+    score: '',
+    comment: '',
+    recommendation: 'recommended',
+  };
+}
+
 export default function InterviewsPage() {
   const [interviews, setInterviews] = useState([]);
   const [forms, setForms] = useState({});
+  const [results, setResults] = useState({});
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [busyKey, setBusyKey] = useState('');
 
   async function loadInterviews() {
     setLoading(true);
@@ -25,9 +39,11 @@ export default function InterviewsPage() {
 
     try {
       const { data } = await interviewApi.assigned();
-      setInterviews(data.interviews || []);
+      setInterviews(asArray(data.interviews));
     } catch (err) {
-      setError(getApiError(err));
+      const text = getApiError(err);
+      logger.error('assigned_interviews_load_failed', { message: text });
+      setError(text);
     } finally {
       setLoading(false);
     }
@@ -37,85 +53,124 @@ export default function InterviewsPage() {
     loadInterviews();
   }, []);
 
-  function formFor(interviewId) {
-    return forms[interviewId] || {
-      date: '',
-      score: '',
-      comment: '',
-      recommendation: 'recommended',
-    };
+  function formFor(interview) {
+    return forms[interview.interview_id] || defaultForm(interview);
   }
 
-  function updateForm(interviewId, field, value) {
+  function updateForm(interview, field, value) {
     setForms((current) => ({
       ...current,
-      [interviewId]: {
-        ...formFor(interviewId),
+      [interview.interview_id]: {
+        ...(current[interview.interview_id] || defaultForm(interview)),
         [field]: value,
       },
     }));
   }
 
-  async function runAction(action, success) {
+  async function runAction(key, success, action) {
     setError('');
     setMessage('');
+    setBusyKey(key);
 
     try {
       await action();
       setMessage(success);
+      logger.action(`${key}_success`);
       await loadInterviews();
     } catch (err) {
-      setError(getApiError(err));
+      const text = getApiError(err);
+      logger.error(`${key}_failed`, { message: text });
+      setError(text);
+    } finally {
+      setBusyKey('');
     }
   }
 
   function schedule(interview) {
-    const form = formFor(interview.interview_id);
+    const form = formFor(interview);
 
-    return runAction(
-      () => interviewApi.schedule(interview.interview_id, new Date(form.date).toISOString()),
-      'Interview scheduled.',
-    );
+    if (!form.date) {
+      setError('Choose interview date and time first.');
+      logger.warn('interview_schedule_missing_date', { interview_id: interview.interview_id });
+      return undefined;
+    }
+
+    return runAction(`interview_${interview.interview_id}_schedule`, 'Interview scheduled.', () => (
+      interviewApi.schedule(interview.interview_id, new Date(form.date).toISOString())
+    ));
   }
 
   function complete(interview) {
-    return runAction(
-      () => interviewApi.complete(interview.interview_id),
-      'Interview marked as completed.',
-    );
+    return runAction(`interview_${interview.interview_id}_complete`, 'Interview marked as completed.', () => (
+      interviewApi.complete(interview.interview_id)
+    ));
   }
 
-  function submitResult(interview) {
-    const form = formFor(interview.interview_id);
+  function cancel(interview) {
+    return runAction(`interview_${interview.interview_id}_cancel`, 'Interview canceled.', () => (
+      interviewApi.cancel(interview.interview_id)
+    ));
+  }
 
-    return runAction(
-      () => interviewApi.createResult(interview.interview_id, {
-        score: Number(form.score),
-        comment: form.comment,
-        recommendation: form.recommendation,
-      }),
-      'Interview result submitted.',
-    );
+  function loadResult(interview) {
+    return runAction(`interview_${interview.interview_id}_result_load`, 'Result loaded.', async () => {
+      const { data } = await interviewApi.result(interview.interview_id);
+      const result = data.result;
+
+      setResults((current) => ({ ...current, [interview.interview_id]: result }));
+      setForms((current) => ({
+        ...current,
+        [interview.interview_id]: {
+          ...(current[interview.interview_id] || defaultForm(interview)),
+          score: String(result.score ?? ''),
+          comment: result.comment || '',
+          recommendation: result.recommendation || 'recommended',
+        },
+      }));
+    });
+  }
+
+  function saveResult(interview) {
+    const form = formFor(interview);
+    const payload = {
+      score: Number(form.score),
+      comment: form.comment,
+      recommendation: form.recommendation,
+    };
+
+    return runAction(`interview_${interview.interview_id}_result_save`, 'Interview result saved.', async () => {
+      try {
+        const { data } = await interviewApi.createResult(interview.interview_id, payload);
+        setResults((current) => ({ ...current, [interview.interview_id]: data.result }));
+      } catch (err) {
+        if (err.response?.status !== 409) {
+          throw err;
+        }
+
+        const { data } = await interviewApi.updateResult(interview.interview_id, payload);
+        setResults((current) => ({ ...current, [interview.interview_id]: data.result }));
+      }
+    });
   }
 
   return (
     <section className="stack">
-      <div className="page-title">
-        <div>
-          <h1>Assigned interviews</h1>
-          <p className="muted">Schedule, complete and evaluate assigned candidates.</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Assigned interviews"
+        description="Schedule, complete, and evaluate assigned candidates."
+      />
 
       <Alert type="error">{error}</Alert>
       <Alert type="success">{message}</Alert>
 
       {loading ? (
-        <div className="panel">Loading interviews...</div>
+        <LoadingState>Loading interviews...</LoadingState>
       ) : interviews.length ? (
         <div className="stack">
           {interviews.map((interview) => {
-            const form = formFor(interview.interview_id);
+            const form = formFor(interview);
+            const result = results[interview.interview_id];
+            const isBusy = busyKey.startsWith(`interview_${interview.interview_id}_`);
 
             return (
               <article className="card wide-card" key={interview.interview_id}>
@@ -124,10 +179,16 @@ export default function InterviewsPage() {
                     <h2>Interview #{interview.interview_id}</h2>
                     <p className="muted">
                       Application #{interview.application_id}
-                      {interview.application?.vacancy?.title ? ` · ${interview.application.vacancy.title}` : ''}
+                      {interview.application?.vacancy?.title ? ` / ${interview.application.vacancy.title}` : ''}
                     </p>
                   </div>
                   <StatusBadge>{interview.status}</StatusBadge>
+                </div>
+
+                <div className="meta-list">
+                  <span>Date: {formatDateTime(interview.date)}</span>
+                  <span>Candidate ID: {interview.application?.user_id || 'Unknown'}</span>
+                  <span>Project: {interview.application?.vacancy?.project?.name || 'Unknown'}</span>
                 </div>
 
                 <div className="split-grid">
@@ -137,15 +198,35 @@ export default function InterviewsPage() {
                       <input
                         type="datetime-local"
                         value={form.date}
-                        onChange={(event) => updateForm(interview.interview_id, 'date', event.target.value)}
+                        onChange={(event) => updateForm(interview, 'date', event.target.value)}
                       />
                     </Field>
-                    <button className="button secondary" type="button" onClick={() => schedule(interview)}>
-                      Schedule interview
-                    </button>
-                    <button className="button primary" type="button" onClick={() => complete(interview)}>
-                      Mark completed
-                    </button>
+                    <div className="button-row">
+                      <button
+                        className="button secondary"
+                        type="button"
+                        onClick={() => schedule(interview)}
+                        disabled={isBusy}
+                      >
+                        Schedule
+                      </button>
+                      <button
+                        className="button primary"
+                        type="button"
+                        onClick={() => complete(interview)}
+                        disabled={isBusy}
+                      >
+                        Complete
+                      </button>
+                      <button
+                        className="button danger"
+                        type="button"
+                        onClick={() => cancel(interview)}
+                        disabled={isBusy}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
 
                   <div className="subpanel">
@@ -156,13 +237,13 @@ export default function InterviewsPage() {
                         min="0"
                         max="10"
                         value={form.score}
-                        onChange={(event) => updateForm(interview.interview_id, 'score', event.target.value)}
+                        onChange={(event) => updateForm(interview, 'score', event.target.value)}
                       />
                     </Field>
                     <Field label="Recommendation">
                       <select
                         value={form.recommendation}
-                        onChange={(event) => updateForm(interview.interview_id, 'recommendation', event.target.value)}
+                        onChange={(event) => updateForm(interview, 'recommendation', event.target.value)}
                       >
                         {recommendations.map((recommendation) => (
                           <option key={recommendation.value} value={recommendation.value}>
@@ -175,12 +256,34 @@ export default function InterviewsPage() {
                       <textarea
                         rows={3}
                         value={form.comment}
-                        onChange={(event) => updateForm(interview.interview_id, 'comment', event.target.value)}
+                        onChange={(event) => updateForm(interview, 'comment', event.target.value)}
                       />
                     </Field>
-                    <button className="button primary" type="button" onClick={() => submitResult(interview)}>
-                      Submit result
-                    </button>
+                    <div className="button-row">
+                      <button
+                        className="button secondary"
+                        type="button"
+                        onClick={() => loadResult(interview)}
+                        disabled={isBusy}
+                      >
+                        Load result
+                      </button>
+                      <button
+                        className="button primary"
+                        type="button"
+                        onClick={() => saveResult(interview)}
+                        disabled={isBusy}
+                      >
+                        Save result
+                      </button>
+                    </div>
+                    {result && (
+                      <div className="result-box">
+                        <strong>Saved score: {result.score}/10</strong>
+                        <span>Recommendation: {result.recommendation}</span>
+                        <p>{result.comment || 'No comment'}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </article>
@@ -188,7 +291,9 @@ export default function InterviewsPage() {
           })}
         </div>
       ) : (
-        <div className="panel">No assigned interviews.</div>
+        <EmptyState title="No assigned interviews">
+          New assignments will appear here after a project manager creates an interview.
+        </EmptyState>
       )}
     </section>
   );

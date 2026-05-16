@@ -107,6 +107,13 @@ textarea {
   gap: 20px;
 }
 
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 h1,
 h2,
 h3,
@@ -166,6 +173,16 @@ h3 {
   display: grid;
   gap: 12px;
   padding: 16px;
+}
+
+.state-block {
+  display: grid;
+  gap: 6px;
+  padding: 24px;
+  color: #475467;
+  background: #ffffff;
+  border: 1px solid #d9e0e8;
+  border-radius: 8px;
 }
 
 .grid-list {
@@ -245,8 +262,24 @@ h3 {
   border-color: #cbd5e1;
 }
 
+.button.danger {
+  color: #991b1b;
+  background: #fff7f7;
+  border-color: #fecaca;
+}
+
 .button + .button {
   margin-left: 8px;
+}
+
+.button-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.button-row .button + .button {
+  margin-left: 0;
 }
 
 .alert {
@@ -312,11 +345,32 @@ h3 {
   border-radius: 6px;
 }
 
+.meta-list {
+  display: flex;
+  gap: 10px 18px;
+  flex-wrap: wrap;
+  color: #667085;
+  font-size: 14px;
+}
+
+.action-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.action-panel h2,
+.action-panel p {
+  flex-basis: 100%;
+}
+
 @media (max-width: 760px) {
   .topbar,
   .page-title,
   .card-header,
-  .table-row {
+  .table-row,
+  .action-panel {
     align-items: stretch;
     flex-direction: column;
   }
@@ -341,5 +395,13 @@ h3 {
   .button + .button {
     margin-left: 0;
     margin-top: 8px;
+  }
+
+  .button-row {
+    display: grid;
+  }
+
+  .button-row .button + .button {
+    margin-top: 0;
   }
 }

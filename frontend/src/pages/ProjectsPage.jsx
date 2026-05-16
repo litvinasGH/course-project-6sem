@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Alert from '../components/Alert.jsx';
 import Field from '../components/Field.jsx';
+import { EmptyState, LoadingState, PageHeader } from '../components/StateBlock.jsx';
 import { getApiError } from '../api/client';
 import { projectApi } from '../api/endpoints';
+import { loadProjectList } from '../api/loaders';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { isManager } from '../utils/roles';
+import { compactText } from '../utils/data';
+import { logger } from '../utils/logger';
 
 export default function ProjectsPage() {
   const { user } = useAuth();
@@ -14,16 +18,19 @@ export default function ProjectsPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   async function loadProjects() {
     setLoading(true);
     setError('');
 
     try {
-      const { data } = await projectApi.list();
-      setProjects(data.projects || []);
+      const items = await loadProjectList();
+      setProjects(items);
     } catch (err) {
-      setError(getApiError(err));
+      const text = getApiError(err);
+      logger.error('projects_load_failed', { message: text });
+      setError(text);
     } finally {
       setLoading(false);
     }
@@ -41,6 +48,8 @@ export default function ProjectsPage() {
     event.preventDefault();
     setError('');
     setMessage('');
+    setSubmitting(true);
+    logger.action('project_create_submit', { name: form.name });
 
     try {
       await projectApi.create(form);
@@ -48,18 +57,20 @@ export default function ProjectsPage() {
       setMessage('Project created.');
       await loadProjects();
     } catch (err) {
-      setError(getApiError(err));
+      const text = getApiError(err);
+      logger.error('project_create_failed', { name: form.name, message: text });
+      setError(text);
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
     <section className="stack">
-      <div className="page-title">
-        <div>
-          <h1>Projects</h1>
-          <p className="muted">Browse projects and open project vacancy lists.</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Projects"
+        description="Browse projects and open vacancy lists."
+      />
 
       <Alert type="error">{error}</Alert>
       <Alert type="success">{message}</Alert>
@@ -73,26 +84,34 @@ export default function ProjectsPage() {
           <Field label="Description">
             <textarea name="description" value={form.description} onChange={updateField} rows={3} />
           </Field>
-          <button className="button primary" type="submit">Create project</button>
+          <button className="button primary" type="submit" disabled={submitting}>
+            {submitting ? 'Creating...' : 'Create project'}
+          </button>
         </form>
       )}
 
-      <div className="grid-list">
-        {loading ? (
-          <div className="panel">Loading projects...</div>
-        ) : projects.length ? (
-          projects.map((project) => (
+      {loading ? (
+        <LoadingState>Loading projects...</LoadingState>
+      ) : projects.length ? (
+        <div className="grid-list">
+          {projects.map((project) => (
             <article className="card" key={project.project_id}>
-              <h2>{project.name}</h2>
-              <p className="muted">{project.description || 'No description'}</p>
-              <p className="meta">Owner ID: {project.owner_id}</p>
-              <Link className="button secondary" to={`/projects/${project.project_id}`}>Open vacancies</Link>
+              <div>
+                <h2>{project.name}</h2>
+                <p className="muted">{compactText(project.description, 'No description')}</p>
+              </div>
+              <p className="meta">Project ID: {project.project_id}</p>
+              <Link className="button secondary" to={`/projects/${project.project_id}`}>
+                Open vacancies
+              </Link>
             </article>
-          ))
-        ) : (
-          <div className="panel">No projects yet.</div>
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="No projects yet">
+          A project manager can create the first project from this page.
+        </EmptyState>
+      )}
     </section>
   );
 }

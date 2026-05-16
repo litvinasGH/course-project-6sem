@@ -4,6 +4,7 @@ const prisma = require('../db');
 const config = require('../utils/config');
 const AppError = require('../utils/appError');
 const { formatUser } = require('../utils/formatters');
+const logger = require('../utils/logger');
 
 function createToken(user) {
   return jwt.sign(
@@ -32,11 +33,22 @@ async function registerUser(data) {
     });
   } catch (err) {
     if (err.code === 'P2002') {
+      logger.warn('register_failed', {
+        email: data.email,
+        reason: 'email_already_registered',
+      });
+
       throw new AppError('Email is already registered', 409);
     }
 
     throw err;
   }
+
+  logger.action('register_success', {
+    user_id: user.user_id,
+    role: user.role,
+    email: user.email,
+  });
 
   return {
     user: formatUser(user),
@@ -50,14 +62,30 @@ async function loginUser(data) {
   });
 
   if (!user) {
+    logger.warn('login_failed', {
+      email: data.email,
+      reason: 'user_not_found',
+    });
+
     throw new AppError('Invalid email or password', 401);
   }
 
   const isPasswordValid = await bcrypt.compare(data.password, user.password_hash);
 
   if (!isPasswordValid) {
+    logger.warn('login_failed', {
+      email: data.email,
+      user_id: user.user_id,
+      reason: 'invalid_password',
+    });
+
     throw new AppError('Invalid email or password', 401);
   }
+
+  logger.action('login_success', {
+    user_id: user.user_id,
+    role: user.role,
+  });
 
   return {
     user: formatUser(user),

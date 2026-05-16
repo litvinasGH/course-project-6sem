@@ -4,6 +4,12 @@ export const ROLES = {
   project_manager: 'Project Manager',
 };
 
+export const ROLE_OPTIONS = [
+  { value: 'CANDIDATE', label: 'Candidate' },
+  { value: 'INTERVIEWER', label: 'Interviewer' },
+  { value: 'PROJECT_MANAGER', label: 'Project Manager' },
+];
+
 export function roleLabel(role) {
   return ROLES[role] || role || 'Unknown';
 }

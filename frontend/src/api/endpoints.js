@@ -15,7 +15,6 @@ export const projectApi = {
 
 export const vacancyApi = {
   apply: (vacancyId) => api.post(`/vacancies/${vacancyId}/applications`, {}),
-  applications: (vacancyId) => api.get(`/vacancies/${vacancyId}/applications`),
 };
 
 export const applicationApi = {
@@ -31,6 +30,7 @@ export const interviewApi = {
   assigned: () => api.get('/interviews/assigned/my'),
   schedule: (interviewId, date) => api.put(`/interviews/${interviewId}/schedule`, { date }),
   complete: (interviewId) => api.put(`/interviews/${interviewId}/complete`, {}),
+  cancel: (interviewId) => api.put(`/interviews/${interviewId}/cancel`, {}),
   result: (interviewId) => api.get(`/interviews/${interviewId}/result`),
   createResult: (interviewId, data) => api.post(`/interviews/${interviewId}/result`, data),
   updateResult: (interviewId, data) => api.put(`/interviews/${interviewId}/result`, data),

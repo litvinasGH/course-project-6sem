@@ -1,6 +1,7 @@
 const prisma = require('../db');
 const AppError = require('../utils/appError');
 const { formatVacancy } = require('../utils/formatters');
+const logger = require('../utils/logger');
 
 async function getProjectVacancies(projectId) {
   const project = await prisma.project.findUnique({
@@ -43,6 +44,12 @@ async function createVacancy(projectId, data) {
     include: {
       project: true,
     },
+  });
+
+  logger.action('vacancy_created', {
+    vacancy_id: vacancy.vacancy_id,
+    project_id: projectId,
+    status: vacancy.status,
   });
 
   return formatVacancy(vacancy);
